@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# SQLite
+database/*.db
+
+# OS junk
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
