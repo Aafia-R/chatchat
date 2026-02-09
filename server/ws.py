@@ -1,24 +1,30 @@
-import json
+from db import use_invite
 
-clients = []
+rooms = {}  # token -> [ws1, ws2]
 
-def handle_ws(ws):
-    # Register client
-    clients.append(ws)
-    print("Client connected:", len(clients))
+def handle_ws(ws, token):
+    if token not in rooms:
+        if not use_invite(token):
+            ws.close()
+            return
+        rooms[token] = [ws]
+    else:
+        rooms[token].append(ws)
+
+    if len(rooms[token]) > 2:
+        ws.close()
+        return
 
     try:
         while True:
             msg = ws.receive()
             if msg is None:
                 break
-
-            # Relay to the other client
-            for client in clients:
-                if client is not ws:
-                    client.send(msg)
-
+            for peer in rooms[token]:
+                if peer is not ws:
+                    peer.send(msg)
     finally:
-        clients.remove(ws)
-        print("Client disconnected:", len(clients))
+        rooms[token].remove(ws)
+        if not rooms[token]:
+            del rooms[token]
 
