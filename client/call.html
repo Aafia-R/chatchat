@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>In Call</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
+    <div class="max-w-md w-full p-8 text-center">
+        <div id="status" class="text-2xl font-bold mb-8">Connecting...</div>
+        
+        <div id="callControls" class="hidden">
+            <div class="mb-8">
+                <div class="w-32 h-32 bg-gray-700 rounded-full mx-auto mb-4 flex items-center justify-center">
+                    <span class="text-5xl">🎙️</span>
+                </div>
+                <div id="duration" class="text-gray-400">00:00</div>
+            </div>
+            
+            <button id="endCall" class="bg-red-600 hover:bg-red-700 text-white font-bold py-4 px-8 rounded-full transition">
+                End Call
+            </button>
+        </div>
+    </div>
+    
+    <script>
+        const token = window.location.pathname.split('/').pop();
+    </script>
+    <script src="/js/signaling.js"></script>
+    <script src="/js/webrtc.js"></script>
+    <script src="/js/call.js"></script>
+</body>
+</html>
