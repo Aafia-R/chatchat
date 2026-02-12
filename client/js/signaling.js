@@ -1,29 +1,75 @@
-const socket = io();
-
+let socket;
 let isInitiator = false;
 
-socket.on('connect', () => {
-    socket.emit('join', { token });
-});
+// Extract token from URL: /call/<token>
+function getTokenFromURL() {
+    const parts = window.location.pathname.split('/');
+    return parts[2];
+}
 
-socket.on('ready', () => {
-    isInitiator = socket.id < socket.id; // Simple initiator logic
-    initWebRTC(isInitiator);
-});
+const token = getTokenFromURL();
 
-socket.on('signal', (data) => {
-    handleSignal(data);
-});
+function connectWebSocket() {
+    socket = new WebSocket(`ws://${window.location.host}/ws/${token}`);
 
-socket.on('peer-disconnect', () => {
-    updateStatus('Call ended');
-    setTimeout(() => window.location.href = '/', 2000);
-});
+    socket.onopen = () => {
+        updateStatus('Waiting for peer...');
+    };
+
+    socket.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'ready') {
+                // First peer becomes initiator
+                if (!peerConnection) {
+                    isInitiator = true;
+                    initWebRTC(isInitiator);
+                }
+            }
+
+            else if (data.type === 'peer-disconnect') {
+                updateStatus('Peer disconnected');
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 2000);
+            }
+
+            else if (data.type === 'error') {
+                alert(data.message);
+                window.location.href = '/';
+            }
+
+            else {
+                handleSignal(data);
+            }
+
+        } catch (err) {
+            console.error('Invalid WS message:', err);
+        }
+    };
+
+    socket.onerror = () => {
+        updateStatus('Connection error');
+    };
+
+    socket.onclose = () => {
+        updateStatus('Connection closed');
+    };
+}
 
 function sendSignal(data) {
-    socket.emit('signal', { token, ...data });
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(data));
+    }
 }
 
-function updateStatus(msg) {
-    document.getElementById('status').textContent = msg;
+function updateStatus(message) {
+    const el = document.getElementById('status');
+    if (el) {
+        el.textContent = message;
+    }
 }
+
+// Start connection immediately
+connectWebSocket();

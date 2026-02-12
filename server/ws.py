@@ -1,56 +1,66 @@
+import json
 from db import use_invite
+from config import MAX_PEERS
 
 
-# In-memory map of active call rooms
-# Key: invite token
-# Value: list of WebSocket connections (max 2)
-rooms = {}  # token -> [ws1, ws2]
+# token -> [ws1, ws2]
+rooms = {}
 
 
 def handle_ws(ws, token):
-    # First client joining this token
+    # -----------------------------------------
+    # First peer joining
+    # -----------------------------------------
     if token not in rooms:
-        # Validate and consume the invite token
-        # - must exist
-        # - must not be expired
-        # - must not be already used
+        # Validate and consume invite
         if not use_invite(token):
-            # Invalid or already-used token → reject connection
+            ws.send(json.dumps({"type": "error", "message": "Invalid or expired invite"}))
             ws.close()
             return
 
-        # Create a new room with the first participant
         rooms[token] = [ws]
 
-    # Second (or later) client joining this token
+    # -----------------------------------------
+    # Second peer joining
+    # -----------------------------------------
     else:
+        if len(rooms[token]) >= MAX_PEERS:
+            ws.send(json.dumps({"type": "error", "message": "Room full"}))
+            ws.close()
+            return
+
         rooms[token].append(ws)
 
-    # Enforce 1-to-1 calls only
-    # Any third connection is immediately rejected
-    if len(rooms[token]) > 2:
-        ws.close()
-        return
+        # Notify both peers that room is ready
+        for peer in rooms[token]:
+            peer.send(json.dumps({"type": "ready"}))
 
+    # -----------------------------------------
+    # Message loop
+    # -----------------------------------------
     try:
-        # Main signaling loop
         while True:
-            # Block until a message is received
             msg = ws.receive()
 
-            # None means the socket was closed
             if msg is None:
                 break
 
-            # Relay message to the other peer in the room
-            for peer in rooms[token]:
+            # Relay raw JSON message to the other peer
+            for peer in rooms.get(token, []):
                 if peer is not ws:
                     peer.send(msg)
 
+    # -----------------------------------------
+    # Disconnect handling
+    # -----------------------------------------
     finally:
-        # Cleanup when a client disconnects
-        rooms[token].remove(ws)
+        if token in rooms and ws in rooms[token]:
+            rooms[token].remove(ws)
 
-        # Remove the room entirely if empty
-        if not rooms[token]:
-            del rooms[token]
+            # Notify remaining peer
+            for peer in rooms[token]:
+                peer.send(json.dumps({"type": "peer-disconnect"}))
+
+            # Cleanup empty room
+            if not rooms[token]:
+                del rooms[token]

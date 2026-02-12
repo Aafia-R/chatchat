@@ -1,61 +1,86 @@
-# Flask provides the HTTP server and routing
-from flask import Flask, jsonify
-
-# flask-sock adds WebSocket support on top of Flask
-from flask_sock import Sock
-
-# secrets is used to generate secure, random invite tokens
+import os
 import secrets
 
-# WebSocket handling logic (pairing + message relay)
+from flask import Flask, jsonify, send_from_directory, abort
+from flask_sock import Sock
+
 from ws import handle_ws
-
-# Database helpers (invite storage only)
 from db import init_db, create_invite
+from config import INVITE_TTL
 
 
-# Create the Flask application
-app = Flask(__name__)
+# -------------------------------------------------
+# Paths
+# -------------------------------------------------
 
-# Attach WebSocket support to the Flask app
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+CLIENT_DIR = os.path.join(BASE_DIR, "client")
+
+
+# -------------------------------------------------
+# App Setup
+# -------------------------------------------------
+
+app = Flask(
+    __name__,
+    static_folder=CLIENT_DIR,
+    static_url_path=""
+)
+
 sock = Sock(app)
 
-
-# Initialize the SQLite database on server startup
-# - creates database file if missing
-# - creates invites table if missing
+# Initialize database
 init_db()
 
 
-# HTTP endpoint to create a new invite
-# Called by the client when "Create Call" is clicked
+# -------------------------------------------------
+# Routes
+# -------------------------------------------------
+
+# Home page
+@app.get("/")
+def index():
+    return send_from_directory(CLIENT_DIR, "index.html")
+
+
+# Call page
+@app.get("/call/<token>")
+def call_page(token):
+    # We do NOT validate token here.
+    # Validation happens on WebSocket connect.
+    return send_from_directory(CLIENT_DIR, "call.html")
+
+
+# Static JS/CSS files
+@app.get("/js/<path:filename>")
+def serve_js(filename):
+    return send_from_directory(os.path.join(CLIENT_DIR, "js"), filename)
+
+
+@app.get("/css/<path:filename>")
+def serve_css(filename):
+    return send_from_directory(os.path.join(CLIENT_DIR, "css"), filename)
+
+
+# Create invite
 @app.post("/invite")
 def invite():
-    # Generate a cryptographically secure random token
-    # This token will be used exactly once
     token = secrets.token_urlsafe(16)
 
-    # Store the token in SQLite with expiry + unused flag
-    create_invite(token)
+    create_invite(token, ttl=INVITE_TTL)
 
-    # Return the token to the client as JSON
     return jsonify({"token": token})
 
 
-# WebSocket endpoint for signaling
-# Clients connect to /ws/<token>
-# Only clients with a valid invite token are allowed
+# WebSocket signaling
 @sock.route("/ws/<token>")
 def ws_route(ws, token):
-    # Delegate all WebSocket logic to ws.py
-    # This function:
-    # - validates the token
-    # - pairs exactly two clients
-    # - relays signaling messages between them
     handle_ws(ws, token)
 
 
-# Start the development server
-# Debug mode is fine for V1 testing only
+# -------------------------------------------------
+# Run
+# -------------------------------------------------
+
 if __name__ == "__main__":
     app.run(debug=True)

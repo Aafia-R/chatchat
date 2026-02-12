@@ -1,79 +1,173 @@
 let localStream;
 let peerConnection;
 let startTime;
+let timerInterval;
+let remoteDescriptionSet = false;
+let pendingCandidates = [];
 
 const config = {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
 };
 
 async function initWebRTC(isInitiator) {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    peerConnection = new RTCPeerConnection(config);
-    
-    localStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, localStream);
-    });
-    
-    peerConnection.ontrack = (event) => {
-        const audio = new Audio();
-        audio.srcObject = event.streams[0];
-        audio.play();
-        updateStatus('Connected');
-        document.getElementById('callControls').classList.remove('hidden');
-        startTimer();
-    };
-    
-    peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-            sendSignal({ type: 'ice-candidate', candidate: event.candidate });
+    try {
+        updateStatus('Requesting microphone access...');
+
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        peerConnection = new RTCPeerConnection(config);
+
+        // Add local tracks
+        localStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, localStream);
+        });
+
+        // Remote stream
+        peerConnection.ontrack = (event) => {
+            const audio = new Audio();
+            audio.srcObject = event.streams[0];
+            audio.play();
+
+            updateStatus('Connected');
+            showCallControls();
+            startTimer();
+        };
+
+        // ICE handling
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                sendSignal({
+                    type: 'ice-candidate',
+                    candidate: event.candidate
+                });
+            }
+        };
+
+        // Initiator creates offer
+        if (isInitiator) {
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+
+            sendSignal({
+                type: 'offer',
+                offer
+            });
         }
-    };
-    
-    if (isInitiator) {
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        sendSignal({ type: 'offer', offer });
+
+    } catch (err) {
+        console.error('Media error:', err);
+        alert('Microphone permission denied or unavailable.');
+        window.location.href = '/';
     }
 }
 
 async function handleSignal(data) {
+    if (!peerConnection) return;
+
     if (data.type === 'offer') {
-        await peerConnection.setRemoteDescription(data.offer);
+        await peerConnection.setRemoteDescription(
+            new RTCSessionDescription(data.offer)
+        );
+        remoteDescriptionSet = true;
+
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
-        sendSignal({ type: 'answer', answer });
-    } else if (data.type === 'answer') {
-        await peerConnection.setRemoteDescription(data.answer);
-    } else if (data.type === 'ice-candidate') {
-        await peerConnection.addIceCandidate(data.candidate);
+
+        sendSignal({
+            type: 'answer',
+            answer
+        });
+
+        flushPendingCandidates();
+    }
+
+    else if (data.type === 'answer') {
+        await peerConnection.setRemoteDescription(
+            new RTCSessionDescription(data.answer)
+        );
+        remoteDescriptionSet = true;
+
+        flushPendingCandidates();
+    }
+
+    else if (data.type === 'ice-candidate') {
+        const candidate = new RTCIceCandidate(data.candidate);
+
+        if (remoteDescriptionSet) {
+            await peerConnection.addIceCandidate(candidate);
+        } else {
+            pendingCandidates.push(candidate);
+        }
     }
 }
 
+function flushPendingCandidates() {
+    pendingCandidates.forEach(async candidate => {
+        await peerConnection.addIceCandidate(candidate);
+    });
+    pendingCandidates = [];
+}
+
 function endCall() {
-    if (peerConnection) peerConnection.close();
-    if (localStream) localStream.getTracks().forEach(track => track.stop());
-    
-    saveCallHistory();
+    cleanupConnection();
+    saveCallToHistory();
     window.location.href = '/';
+}
+
+function cleanupConnection() {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
+
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
 }
 
 function startTimer() {
     startTime = Date.now();
-    setInterval(() => {
+
+    timerInterval = setInterval(() => {
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
-        const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
-        const secs = (elapsed % 60).toString().padStart(2, '0');
-        document.getElementById('duration').textContent = `${mins}:${secs}`;
+        const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+        const secs = String(elapsed % 60).padStart(2, '0');
+
+        const el = document.getElementById('duration');
+        if (el) el.textContent = `${mins}:${secs}`;
     }, 1000);
 }
 
-function saveCallHistory() {
+function saveCallToHistory() {
+    if (!startTime) return;
+
     const duration = Math.floor((Date.now() - startTime) / 1000);
-    const history = JSON.parse(localStorage.getItem('callHistory') || '[]');
-    history.unshift({
-        type: 'outgoing',
-        time: Date.now(),
-        duration
-    });
-    localStorage.setItem('callHistory', JSON.stringify(history.slice(0, 10)));
+
+    if (typeof saveCall === 'function') {
+        saveCall({
+            direction: 'outgoing',
+            startedAt: Date.now(),
+            duration,
+            peer: 'unknown'
+        });
+    }
 }
+
+function showCallControls() {
+    const el = document.getElementById('callControls');
+    if (el) el.classList.remove('hidden');
+}
+
+// Bind end button safely
+document.addEventListener('DOMContentLoaded', () => {
+    const endBtn = document.getElementById('endCall');
+    if (endBtn) {
+        endBtn.addEventListener('click', endCall);
+    }
+});
