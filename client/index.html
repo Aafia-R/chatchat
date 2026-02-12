@@ -3,33 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>chatchat</title>
+    <title>Secure Call</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
+
     <div class="max-w-md w-full p-8">
+
         <h1 class="text-4xl font-bold mb-8 text-center">🔒 Secure Call</h1>
-        
-        <button id="createCallBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg mb-6 transition">
+
+        <!-- Create Call Button -->
+        <button id="createCallBtn"
+            class="w-full bg-blue-600 hover:bg-blue-700 font-bold py-4 px-6 rounded-lg mb-6 transition">
             Create Call Link
         </button>
-        
+
+        <!-- Share Link UI -->
         <div id="linkContainer" class="hidden bg-gray-800 p-4 rounded-lg mb-6">
             <p class="text-sm text-gray-400 mb-2">Share this link:</p>
             <div class="flex gap-2">
-                <input id="callLink" readonly class="flex-1 bg-gray-700 px-3 py-2 rounded text-sm">
-                <button id="copyLink" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm transition">
+                <input id="callLink" readonly
+                    class="flex-1 bg-gray-700 px-3 py-2 rounded text-sm">
+                <button id="copyLink"
+                    class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm">
                     Copy
                 </button>
             </div>
+
+            <button id="joinCall"
+                class="mt-4 w-full bg-blue-600 hover:bg-blue-700 py-3 rounded">
+                Join Call
+            </button>
         </div>
-        
-        <div id="history" class="mt-8">
+
+        <!-- Call History -->
+        <div class="mt-8">
             <h2 class="text-xl font-bold mb-4">Recent Calls</h2>
-            <div id="historyList" class="space-y-2"></div>
+            <div id="callHistoryList" class="space-y-2"></div>
         </div>
+
     </div>
-    
+
+    <script src="/js/storage.js"></script>
     <script src="/js/main.js"></script>
+
 </body>
 </html>

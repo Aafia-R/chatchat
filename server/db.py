@@ -33,10 +33,7 @@ def create_invite(token, ttl):
     try:
         db.execute(
             "INSERT INTO invites VALUES (?, ?, 0)",
-            (
-                token,
-                int(time.time()) + ttl
-            )
+            (token, int(time.time()) + ttl)
         )
         db.commit()
     finally:
