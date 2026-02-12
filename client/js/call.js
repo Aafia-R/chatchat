@@ -1,0 +1,1 @@
+document.getElementById('endCall').addEventListener('click', endCall);

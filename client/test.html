@@ -1,0 +1,14 @@
+<!doctype html>
+<html>
+<body>
+<script>
+const ws = new WebSocket(
+  "ws://127.0.0.1:5000/ws/lO_LkGUKiDujC8rY0lV2Rw"
+);
+
+ws.onopen = () => console.log("connected");
+ws.onmessage = e => console.log("got:", e.data);
+ws.onerror = e => console.error("ws error", e);
+</script>
+</body>
+</html>
