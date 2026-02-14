@@ -16,8 +16,13 @@ function connectWebSocket() {
     socket = new WebSocket(`${protocol}://${window.location.host}/ws/${token}`);
 
     socket.onopen = () => {
-        updateStatus('Waiting for peer...');
+        updateStatus('Connected to signaling');
+
+        if (peerConnection && peerConnection.connectionState !== "connected") {
+            restartIce();
+        }
     };
+
 
     socket.onmessage = (event) => {
         try {

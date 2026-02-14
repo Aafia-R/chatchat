@@ -13,21 +13,26 @@
     <div class="max-w-md w-full p-8">
 
         <h1 class="text-4xl font-bold mb-8 text-center">🔒 Secure Call</h1>
-        <div class="mb-4">
-            <label class="block text-sm text-gray-400 mb-2">Link expires in:</label>
-            <select id="expirySelect" class="w-full bg-gray-800 px-3 py-2 rounded">
-                <option value="60">1 minute</option>
-                <option value="300" selected>5 minutes</option>
-                <option value="900">15 minutes</option>
-                <option value="1800">30 minutes</option>
-                <option value="3600">1 hour</option>
-            </select>
+
+        <div id="expiryControls" class="mb-4 space-y-3">
+
+            <div>
+                <label class="block text-sm text-gray-400 mb-2">Link expires in:</label>
+                <select id="expirySelect" class="w-full bg-gray-800 px-3 py-2 rounded-lg">
+                    <option value="60">1 minute</option>
+                    <option value="300" selected>5 minutes</option>
+                    <option value="900">15 minutes</option>
+                    <option value="1800">30 minutes</option>
+                    <option value="3600">1 hour</option>
+                </select>
+            </div>
+
+            <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" id="oneTimeInvite">
+                Expire after first call
+            </label>
+
         </div>
-        
-        <label class="flex items-center gap-2 mt-3 text-sm">
-            <input type="checkbox" id="oneTimeInvite">
-            Expire after first call
-        </label>
 
         <!-- Create Call Button -->
         <button id="createCallBtn"
@@ -46,14 +51,13 @@
                 </button>
             </div>
 
-
             <div id="expiryTimer" class="text-xs text-gray-400 mt-2"></div>
 
-            <button id="joinCall" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 py-3 rounded">
+            <button id="joinCall"
+                class="mt-4 w-full bg-blue-600 hover:bg-blue-700 py-3 rounded">
                 Join Call
             </button>
         </div>
-
 
         <!-- Call History -->
         <div class="mt-8">
