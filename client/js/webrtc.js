@@ -9,6 +9,9 @@ let startTime;
 let timerInterval;
 let remoteDescriptionSet = false;
 let pendingCandidates = [];
+let p2pFailureShown = false;
+let everConnected = false;
+
 
 // Track references
 let localAudioTrack;
@@ -73,6 +76,8 @@ async function initWebRTC(isInitiator) {
 
         // Handle remote stream
         peerConnection.ontrack = (event) => {
+            everConnected = true;
+
             const remoteVideo = document.getElementById('remoteVideo');
             
             if (remoteVideo) {
@@ -94,16 +99,30 @@ async function initWebRTC(isInitiator) {
             }
         };
 
+        peerConnection.oniceconnectionstatechange = () => {
+            console.log('ICE state:', peerConnection.iceConnectionState);
+
+            if (peerConnection.iceConnectionState === 'failed' && !everConnected) {
+            showP2PFailure();
+            }
+        };
+
+
         // Connection state monitoring
         peerConnection.onconnectionstatechange = () => {
             console.log('Connection state:', peerConnection.connectionState);
-            
-            if (peerConnection.connectionState === 'disconnected' || 
-                peerConnection.connectionState === 'failed') {
+
+            if (peerConnection.connectionState === 'failed' && !everConnected) {
+                showP2PFailure();
+            }
+
+            else if (peerConnection.connectionState === 'disconnected') {
                 updateStatus('Connection lost');
                 setTimeout(endCall, 2000);
             }
         };
+
+
 
         // Initiator creates offer
         if (isInitiator) {
@@ -301,6 +320,24 @@ function updateStatus(text) {
     const el = document.getElementById('status');
     if (el) el.textContent = text;
 }
+
+function showP2PFailure() {
+    if (p2pFailureShown) return;
+    p2pFailureShown = true;
+
+    updateStatus("Unable to establish direct connection");
+
+    alert(
+        "A direct peer-to-peer connection could not be established.\n\n" +
+        "This usually happens on strict mobile networks, corporate Wi-Fi, or firewalled connections.\n\n" +
+        "Try switching to another network or Wi-Fi."
+    );
+
+    setTimeout(() => {
+        window.location.href = '/';
+    }, 3000);
+}
+
 
 // ========================================
 // EVENT BINDINGS
