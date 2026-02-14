@@ -1,7 +1,7 @@
 import os
 import secrets
 
-from flask import Flask, jsonify, send_from_directory, abort
+from flask import Flask, jsonify, send_from_directory, abort, request
 from flask_sock import Sock
 
 from ws import handle_ws
@@ -65,11 +65,23 @@ def serve_css(filename):
 # Create invite
 @app.post("/invite")
 def invite():
+    data = {}
+    try:
+        data = request.get_json() or {}
+    except:
+        pass
+
+    # default TTL if none provided
+    ttl = data.get("ttl", INVITE_TTL)
+
+    # clamp TTL to safe limits (30 sec → 24h)
+    ttl = max(30, min(int(ttl), 86400))
+
     token = secrets.token_urlsafe(16)
+    create_invite(token, ttl=ttl)
 
-    create_invite(token, ttl=INVITE_TTL)
+    return jsonify({"token": token, "expires_in": ttl})
 
-    return jsonify({"token": token})
 
 
 # WebSocket signaling

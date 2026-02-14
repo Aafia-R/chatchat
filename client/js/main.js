@@ -14,9 +14,17 @@ async function handleCreateCall() {
         createCallBtn.disabled = true;
         createCallBtn.textContent = 'Creating...';
 
+        const ttlSelect = document.getElementById('expirySelect');
+        const ttl = ttlSelect ? parseInt(ttlSelect.value) : 300;
+
         const response = await fetch('/invite', {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ ttl })
         });
+
 
         if (!response.ok) {
             throw new Error('Failed to create invite');

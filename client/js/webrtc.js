@@ -12,7 +12,6 @@ let pendingCandidates = [];
 let p2pFailureShown = false;
 let everConnected = false;
 
-
 // Track references
 let localAudioTrack;
 let localVideoTrack;
@@ -20,6 +19,10 @@ let localVideoTrack;
 // State
 let isMuted = false;
 let isCameraOff = false;
+
+// ICE throttling
+let iceSendTimer = null;
+let iceQueue = [];
 
 const config = {
     iceServers: [
@@ -50,83 +53,97 @@ async function initWebRTC(isInitiator) {
                     facingMode: 'user'
                 }
             });
-        } catch (videoError) {
-            // Fallback to audio-only if camera denied
+        } catch {
             console.warn('Camera denied, falling back to audio-only');
             localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         }
 
-        // Store track references
         localAudioTrack = localStream.getAudioTracks()[0];
         localVideoTrack = localStream.getVideoTracks()[0];
 
-        // Show local preview
         const localVideo = document.getElementById('localVideo');
         if (localVideo && localVideoTrack) {
             localVideo.srcObject = localStream;
         }
 
-        // Create peer connection
         peerConnection = new RTCPeerConnection(config);
 
-        // Add local tracks
         localStream.getTracks().forEach(track => {
             peerConnection.addTrack(track, localStream);
         });
 
-        // Handle remote stream
+        // =========================
+        // Remote stream arrived
+        // =========================
         peerConnection.ontrack = (event) => {
             everConnected = true;
 
             const remoteVideo = document.getElementById('remoteVideo');
-            
             if (remoteVideo) {
                 remoteVideo.srcObject = event.streams[0];
             }
 
-            updateStatus('Connected');
+            updateStatus('Direct connection established');
             showCallControls();
             startTimer();
         };
 
-        // ICE handling
+        // =========================
+        // ICE candidate sending (throttled)
+        // =========================
         peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                sendSignal({
-                    type: 'ice-candidate',
-                    candidate: event.candidate
-                });
+            if (!event.candidate) return;
+
+            iceQueue.push(event.candidate);
+
+            if (!iceSendTimer) {
+                iceSendTimer = setTimeout(() => {
+                    iceQueue.forEach(c =>
+                        sendSignal({ type: 'ice-candidate', candidate: c })
+                    );
+                    iceQueue = [];
+                    iceSendTimer = null;
+                }, 50);
             }
         };
 
+        // =========================
+        // ICE state monitoring
+        // =========================
         peerConnection.oniceconnectionstatechange = () => {
             console.log('ICE state:', peerConnection.iceConnectionState);
 
             if (peerConnection.iceConnectionState === 'failed' && !everConnected) {
-            showP2PFailure();
+                showP2PFailure();
             }
         };
 
-
+        // =========================
         // Connection state monitoring
+        // =========================
         peerConnection.onconnectionstatechange = () => {
             console.log('Connection state:', peerConnection.connectionState);
 
-            if (peerConnection.connectionState === 'failed' && !everConnected) {
-                showP2PFailure();
+            if (peerConnection.connectionState === 'failed') {
+                if (!everConnected) {
+                    showP2PFailure();
+                } else {
+                    restartIce();
+                }
             }
 
             else if (peerConnection.connectionState === 'disconnected') {
-                updateStatus('Connection lost');
-                setTimeout(endCall, 2000);
+                updateStatus('Connection lost… attempting recovery');
+                setTimeout(restartIce, 1200);
             }
         };
 
-
-
-        // Initiator creates offer
+        // =========================
+        // Offer creation
+        // =========================
         if (isInitiator) {
-            updateStatus('Calling...');
+            updateStatus('Testing direct connection…');
+
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
 
@@ -134,19 +151,19 @@ async function initWebRTC(isInitiator) {
                 type: 'offer',
                 offer
             });
+
         } else {
-            updateStatus('Incoming call...');
+            updateStatus('Connecting to peer…');
         }
 
-        // Apply any signals that arrived before WebRTC initialized
+        // Apply buffered signals
         if (typeof flushBufferedSignals === "function") {
             flushBufferedSignals();
         }
 
-
     } catch (err) {
         console.error('Media error:', err);
-        
+
         if (err.name === 'NotAllowedError') {
             alert('Camera/microphone permission denied.');
         } else if (err.name === 'NotFoundError') {
@@ -154,8 +171,33 @@ async function initWebRTC(isInitiator) {
         } else {
             alert('Failed to access media devices.');
         }
-        
+
         window.location.href = '/';
+    }
+}
+
+// ========================================
+// ICE RESTART (network recovery)
+// ========================================
+
+async function restartIce() {
+    if (!peerConnection) return;
+
+    console.log("Attempting ICE restart…");
+
+    try {
+        const offer = await peerConnection.createOffer({ iceRestart: true });
+        await peerConnection.setLocalDescription(offer);
+
+        sendSignal({
+            type: "offer",
+            offer
+        });
+
+        updateStatus("Reconnecting…");
+
+    } catch (err) {
+        console.error("ICE restart failed:", err);
     }
 }
 
@@ -220,17 +262,14 @@ function toggleMute() {
     isMuted = !isMuted;
     localAudioTrack.enabled = !isMuted;
 
-    // Update UI
     const muteBtn = document.getElementById('muteBtn');
     const muteIcon = document.getElementById('muteIcon');
-    
+
     if (muteBtn && muteIcon) {
         muteIcon.textContent = isMuted ? '🔇' : '🎤';
         muteBtn.classList.toggle('bg-red-600', isMuted);
         muteBtn.classList.toggle('bg-gray-700', !isMuted);
     }
-
-    return isMuted;
 }
 
 function toggleCamera() {
@@ -239,17 +278,14 @@ function toggleCamera() {
     isCameraOff = !isCameraOff;
     localVideoTrack.enabled = !isCameraOff;
 
-    // Update UI
     const cameraBtn = document.getElementById('cameraBtn');
     const cameraIcon = document.getElementById('cameraIcon');
-    
+
     if (cameraBtn && cameraIcon) {
         cameraIcon.textContent = isCameraOff ? '📷' : '📹';
         cameraBtn.classList.toggle('bg-gray-600', isCameraOff);
         cameraBtn.classList.toggle('bg-gray-700', !isCameraOff);
     }
-
-    return isCameraOff;
 }
 
 // ========================================
@@ -257,6 +293,10 @@ function toggleCamera() {
 // ========================================
 
 function endCall() {
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+    }
+
     cleanupConnection();
     saveCallToHistory();
     window.location.href = '/';
@@ -338,6 +378,19 @@ function showP2PFailure() {
     }, 3000);
 }
 
+// ========================================
+// PERFORMANCE: pause video when tab hidden
+// ========================================
+
+document.addEventListener("visibilitychange", () => {
+    if (!localVideoTrack) return;
+
+    if (document.hidden) {
+        localVideoTrack.enabled = false;
+    } else if (!isCameraOff) {
+        localVideoTrack.enabled = true;
+    }
+});
 
 // ========================================
 // EVENT BINDINGS
@@ -348,15 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const muteBtn = document.getElementById('muteBtn');
     const cameraBtn = document.getElementById('cameraBtn');
 
-    if (endBtn) {
-        endBtn.addEventListener('click', endCall);
-    }
-
-    if (muteBtn) {
-        muteBtn.addEventListener('click', toggleMute);
-    }
-
-    if (cameraBtn) {
-        cameraBtn.addEventListener('click', toggleCamera);
-    }
+    if (endBtn) endBtn.addEventListener('click', endCall);
+    if (muteBtn) muteBtn.addEventListener('click', toggleMute);
+    if (cameraBtn) cameraBtn.addEventListener('click', toggleCamera);
 });
