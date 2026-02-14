@@ -17,13 +17,17 @@ async function handleCreateCall() {
         const ttlSelect = document.getElementById('expirySelect');
         const ttl = ttlSelect ? parseInt(ttlSelect.value) : 300;
 
+        const oneTime =
+            document.getElementById('oneTimeInvite')?.checked ? 1 : 0;
+
         const response = await fetch('/invite', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ ttl })
+            body: JSON.stringify({ ttl, one_time: oneTime })
         });
+
 
 
         if (!response.ok) {
@@ -36,6 +40,7 @@ async function handleCreateCall() {
         const callURL = `${window.location.origin}/call/${token}`;
 
         showShareLink(callURL);
+        startExpiryCountdown(data.expires_in);
 
     } catch (error) {
         console.error(error);
@@ -98,5 +103,29 @@ function renderCallHistory() {
         `;
     }).join('');
 }
+
+function startExpiryCountdown(seconds) {
+    const el = document.getElementById('expiryTimer');
+    if (!el) return;
+
+    function tick() {
+        if (seconds <= 0) {
+            el.textContent = "Link expired";
+            return;
+        }
+
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+
+        el.textContent =
+            `Link expires in ${m}:${String(s).padStart(2, '0')}`;
+
+        seconds--;
+        setTimeout(tick, 1000);
+    }
+
+    tick();
+}
+
 
 document.addEventListener('DOMContentLoaded', init);

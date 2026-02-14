@@ -24,6 +24,16 @@ let isCameraOff = false;
 let iceSendTimer = null;
 let iceQueue = [];
 
+// reconnecting
+let reconnectAttempts = 0;
+let reconnectTimer = null;
+
+let reconnecting = false;
+let dataChannel = null;
+let pingInterval = null;
+let lastPong = Date.now();
+let qualityInterval = null;
+
 const config = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
@@ -39,7 +49,6 @@ async function initWebRTC(isInitiator) {
     try {
         updateStatus('Requesting camera and microphone...');
 
-        // Request video + audio
         try {
             localStream = await navigator.mediaDevices.getUserMedia({
                 audio: {
@@ -68,6 +77,18 @@ async function initWebRTC(isInitiator) {
 
         peerConnection = new RTCPeerConnection(config);
 
+        // ---------- DATA CHANNEL FOR PING ----------
+        if (isInitiator) {
+            dataChannel = peerConnection.createDataChannel("ping");
+            setupDataChannel();
+        } else {
+            peerConnection.ondatachannel = (event) => {
+                dataChannel = event.channel;
+                setupDataChannel();
+            };
+        }
+
+        // Add tracks
         localStream.getTracks().forEach(track => {
             peerConnection.addTrack(track, localStream);
         });
@@ -85,7 +106,9 @@ async function initWebRTC(isInitiator) {
 
             updateStatus('Direct connection established');
             showCallControls();
-            startTimer();
+
+            if (!timerInterval) startTimer();
+            startQualityMonitor();
         };
 
         // =========================
@@ -124,17 +147,30 @@ async function initWebRTC(isInitiator) {
         peerConnection.onconnectionstatechange = () => {
             console.log('Connection state:', peerConnection.connectionState);
 
-            if (peerConnection.connectionState === 'failed') {
+            if (peerConnection.connectionState === 'connected') {
+                reconnectAttempts = 0;
+                reconnecting = false;
+                showReconnectOverlay(false);
+                resumeTimer();
+                updateStatus('Direct connection established');
+            }
+
+            else if (peerConnection.connectionState === 'failed') {
                 if (!everConnected) {
                     showP2PFailure();
                 } else {
-                    restartIce();
+                    reconnecting = true;
+                    pauseTimer();
+                    showReconnectOverlay(true);
+                    scheduleReconnect();
                 }
             }
 
             else if (peerConnection.connectionState === 'disconnected') {
-                updateStatus('Connection lost… attempting recovery');
-                setTimeout(restartIce, 1200);
+                reconnecting = true;
+                pauseTimer();
+                showReconnectOverlay(true);
+                scheduleReconnect();
             }
         };
 
@@ -147,16 +183,12 @@ async function initWebRTC(isInitiator) {
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
 
-            sendSignal({
-                type: 'offer',
-                offer
-            });
+            sendSignal({ type: 'offer', offer });
 
         } else {
             updateStatus('Connecting to peer…');
         }
 
-        // Apply buffered signals
         if (typeof flushBufferedSignals === "function") {
             flushBufferedSignals();
         }
@@ -164,13 +196,9 @@ async function initWebRTC(isInitiator) {
     } catch (err) {
         console.error('Media error:', err);
 
-        if (err.name === 'NotAllowedError') {
-            alert('Camera/microphone permission denied.');
-        } else if (err.name === 'NotFoundError') {
-            alert('No camera or microphone found.');
-        } else {
-            alert('Failed to access media devices.');
-        }
+        if (err.name === 'NotAllowedError') alert('Camera/microphone permission denied.');
+        else if (err.name === 'NotFoundError') alert('No camera or microphone found.');
+        else alert('Failed to access media devices.');
 
         window.location.href = '/';
     }
@@ -183,22 +211,68 @@ async function initWebRTC(isInitiator) {
 async function restartIce() {
     if (!peerConnection) return;
 
-    console.log("Attempting ICE restart…");
-
     try {
         const offer = await peerConnection.createOffer({ iceRestart: true });
         await peerConnection.setLocalDescription(offer);
-
-        sendSignal({
-            type: "offer",
-            offer
-        });
-
+        sendSignal({ type: "offer", offer });
         updateStatus("Reconnecting…");
-
     } catch (err) {
         console.error("ICE restart failed:", err);
     }
+}
+
+function scheduleReconnect() {
+    if (reconnectTimer) return;
+
+    reconnectAttempts++;
+
+    if (reconnectAttempts > 5) {
+        updateStatus("Reconnection failed");
+        setTimeout(endCall, 2000);
+        return;
+    }
+
+    updateStatus("Reconnecting…");
+
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        restartIce();
+    }, 1500);
+}
+
+// ========================================
+// DATA CHANNEL PING SYSTEM
+// ========================================
+
+function setupDataChannel() {
+    if (!dataChannel) return;
+
+    dataChannel.onopen = () => {
+        startPingLoop();
+    };
+
+    dataChannel.onmessage = (event) => {
+        if (event.data === "ping") dataChannel.send("pong");
+        if (event.data === "pong") lastPong = Date.now();
+    };
+}
+
+function startPingLoop() {
+    if (pingInterval) clearInterval(pingInterval);
+
+    pingInterval = setInterval(() => {
+        if (!dataChannel || dataChannel.readyState !== "open") return;
+
+        try {
+            dataChannel.send("ping");
+
+            if (Date.now() - lastPong > 6000 && everConnected) {
+                scheduleReconnect();
+            }
+        } catch (e) {
+            console.warn("Ping error", e);
+        }
+    }, 2000);
 }
 
 // ========================================
@@ -217,11 +291,7 @@ async function handleSignal(data) {
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
 
-        sendSignal({
-            type: 'answer',
-            answer
-        });
-
+        sendSignal({ type: 'answer', answer });
         flushPendingCandidates();
     }
 
@@ -230,7 +300,6 @@ async function handleSignal(data) {
             new RTCSessionDescription(data.answer)
         );
         remoteDescriptionSet = true;
-
         flushPendingCandidates();
     }
 
@@ -258,7 +327,6 @@ function flushPendingCandidates() {
 
 function toggleMute() {
     if (!localAudioTrack) return;
-
     isMuted = !isMuted;
     localAudioTrack.enabled = !isMuted;
 
@@ -274,7 +342,6 @@ function toggleMute() {
 
 function toggleCamera() {
     if (!localVideoTrack) return;
-
     isCameraOff = !isCameraOff;
     localVideoTrack.enabled = !isCameraOff;
 
@@ -293,29 +360,20 @@ function toggleCamera() {
 // ========================================
 
 function endCall() {
-    if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-    }
-
     cleanupConnection();
     saveCallToHistory();
     window.location.href = '/';
 }
 
 function cleanupConnection() {
-    if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-    }
+    if (timerInterval) clearInterval(timerInterval);
+    if (pingInterval) clearInterval(pingInterval);
+    if (qualityInterval) clearInterval(qualityInterval);
 
-    if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-    }
+    if (peerConnection) peerConnection.close();
 
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
-        localStream = null;
     }
 }
 
@@ -373,9 +431,25 @@ function showP2PFailure() {
         "Try switching to another network or Wi-Fi."
     );
 
-    setTimeout(() => {
-        window.location.href = '/';
-    }, 3000);
+    setTimeout(() => window.location.href = '/', 3000);
+}
+
+function showReconnectOverlay(show) {
+    const el = document.getElementById('reconnectOverlay');
+    if (!el) return;
+    el.classList.toggle('hidden', !show);
+}
+
+function pauseTimer() {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+}
+
+function resumeTimer() {
+    if (!startTime || timerInterval) return;
+    startTimer();
 }
 
 // ========================================
@@ -385,12 +459,44 @@ function showP2PFailure() {
 document.addEventListener("visibilitychange", () => {
     if (!localVideoTrack) return;
 
-    if (document.hidden) {
-        localVideoTrack.enabled = false;
-    } else if (!isCameraOff) {
-        localVideoTrack.enabled = true;
-    }
+    if (document.hidden) localVideoTrack.enabled = false;
+    else if (!isCameraOff) localVideoTrack.enabled = true;
 });
+
+// ========================================
+// QUALITY MONITOR
+// ========================================
+
+function startQualityMonitor() {
+    if (qualityInterval) return;
+
+    qualityInterval = setInterval(async () => {
+        try {
+            const stats = await peerConnection.getStats();
+            let rtt = null;
+
+            stats.forEach(report => {
+                if (
+                    report.type === "candidate-pair" &&
+                    report.state === "succeeded" &&
+                    report.currentRoundTripTime
+                ) {
+                    rtt = report.currentRoundTripTime;
+                }
+            });
+
+            const el = document.getElementById("quality");
+            if (!el || rtt === null) return;
+
+            if (rtt < 0.1) el.textContent = "Connection: Good";
+            else if (rtt < 0.25) el.textContent = "Connection: Weak";
+            else el.textContent = "Connection: Unstable";
+
+        } catch (e) {
+            console.warn("Stats error", e);
+        }
+    }, 3000);
+}
 
 // ========================================
 // EVENT BINDINGS

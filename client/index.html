@@ -23,6 +23,11 @@
                 <option value="3600">1 hour</option>
             </select>
         </div>
+        
+        <label class="flex items-center gap-2 mt-3 text-sm">
+            <input type="checkbox" id="oneTimeInvite">
+            Expire after first call
+        </label>
 
         <!-- Create Call Button -->
         <button id="createCallBtn"
@@ -33,6 +38,7 @@
         <!-- Share Link UI -->
         <div id="linkContainer" class="hidden bg-gray-800 p-4 rounded-lg mb-6">
             <p class="text-sm text-gray-400 mb-2">Share this link:</p>
+
             <div class="flex gap-2">
                 <input id="callLink" readonly class="flex-1 bg-gray-700 px-3 py-2 rounded text-sm">
                 <button id="copyLink" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm">
@@ -40,10 +46,14 @@
                 </button>
             </div>
 
+
+            <div id="expiryTimer" class="text-xs text-gray-400 mt-2"></div>
+
             <button id="joinCall" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 py-3 rounded">
                 Join Call
             </button>
         </div>
+
 
         <!-- Call History -->
         <div class="mt-8">

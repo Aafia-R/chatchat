@@ -32,9 +32,10 @@ function connectWebSocket() {
             }
 
             else if (data.type === 'peer-disconnect') {
-                updateStatus('Peer disconnected');
-                setTimeout(() => window.location.href = '/', 2000);
+                updateStatus('Peer is reconnecting…');
             }
+
+
 
             else if (data.type === 'error') {
                 alert(data.message);

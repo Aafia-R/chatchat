@@ -18,22 +18,24 @@ def init_db():
     try:
         db.execute("""
             CREATE TABLE IF NOT EXISTS invites (
-                token TEXT PRIMARY KEY,
-                expires_at INTEGER,
-                used INTEGER
-            )
+            token TEXT PRIMARY KEY,
+            expires_at INTEGER,
+            used INTEGER,
+            one_time INTEGER DEFAULT 0
+)
+
         """)
         db.commit()
     finally:
         db.close()
 
 
-def create_invite(token, ttl):
+def create_invite(token, ttl, one_time=0):
     db = get_db()
     try:
         db.execute(
-            "INSERT INTO invites VALUES (?, ?, 0)",
-            (token, int(time.time()) + ttl)
+            "INSERT INTO invites VALUES (?, ?, 0, ?)",
+            (token, int(time.time()) + ttl, one_time)
         )
         db.commit()
     finally:
@@ -58,5 +60,13 @@ def use_invite(token):
             return False
 
         return True
+    finally:
+        db.close()
+
+def delete_invite(token):
+    db = get_db()
+    try:
+        db.execute("DELETE FROM invites WHERE token=?", (token,))
+        db.commit()
     finally:
         db.close()

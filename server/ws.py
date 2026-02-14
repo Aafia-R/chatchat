@@ -1,5 +1,5 @@
 import json
-from db import use_invite, get_db
+from db import use_invite, get_db, delete_invite
 from config import MAX_PEERS
 
 # token -> [ws1, ws2]
@@ -83,4 +83,6 @@ def handle_ws(ws, token):
                 safe_send(peer, {"type": "peer-disconnect"})
 
             if not rooms[token]:
+                delete_invite(token)
                 del rooms[token]
+

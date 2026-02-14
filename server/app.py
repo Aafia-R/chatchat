@@ -73,12 +73,14 @@ def invite():
 
     # default TTL if none provided
     ttl = data.get("ttl", INVITE_TTL)
+    one_time = int(data.get("one_time", 0))
+
 
     # clamp TTL to safe limits (30 sec → 24h)
     ttl = max(30, min(int(ttl), 86400))
 
     token = secrets.token_urlsafe(16)
-    create_invite(token, ttl=ttl)
+    create_invite(token, ttl=ttl, one_time=one_time)
 
     return jsonify({"token": token, "expires_in": ttl})
 

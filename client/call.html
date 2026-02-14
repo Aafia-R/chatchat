@@ -43,6 +43,13 @@
             </div>
         </div>
 
+        <div class="absolute top-16 left-0 right-0 text-center">
+            <div id="quality" class="text-gray-300 text-sm bg-black bg-opacity-40 inline-block px-4 py-1 rounded-full">
+                Checking connection…
+            </div>
+        </div>
+
+
         <!-- Duration (Top Right) -->
         <div class="absolute top-4 right-4">
             <div id="duration" class="text-white text-xl font-mono bg-black bg-opacity-50 px-4 py-2 rounded-full">
@@ -75,6 +82,15 @@
                     <span id="cameraIcon" class="text-3xl">📹</span>
                 </button>
 
+            </div>
+        </div>
+
+        <!-- Reconnect Overlay -->
+        <div id="reconnectOverlay"
+            class="hidden absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+            <div class="text-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+                <div class="text-white text-lg font-semibold">Reconnecting…</div>
             </div>
         </div>
 
