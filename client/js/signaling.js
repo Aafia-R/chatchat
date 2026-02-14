@@ -1,7 +1,8 @@
 let socket;
 let isInitiator = false;
+let pendingSignals = [];
 
-// Extract token from URL: /call/<token>
+// Extract token from URL
 function getTokenFromURL() {
     const parts = window.location.pathname.split('/');
     return parts[2];
@@ -10,7 +11,9 @@ function getTokenFromURL() {
 const token = getTokenFromURL();
 
 function connectWebSocket() {
-    socket = new WebSocket(`ws://${window.location.host}/ws/${token}`);
+
+    const protocol = location.protocol === "https:" ? "wss" : "ws";
+    socket = new WebSocket(`${protocol}://${window.location.host}/ws/${token}`);
 
     socket.onopen = () => {
         updateStatus('Waiting for peer...');
@@ -21,18 +24,16 @@ function connectWebSocket() {
             const data = JSON.parse(event.data);
 
             if (data.type === 'ready') {
-                // First peer becomes initiator
                 if (!peerConnection) {
-                    isInitiator = true;
+                    isInitiator = data.role === "caller";
+                    window.callDirection = isInitiator ? "outgoing" : "incoming";
                     initWebRTC(isInitiator);
                 }
             }
 
             else if (data.type === 'peer-disconnect') {
                 updateStatus('Peer disconnected');
-                setTimeout(() => {
-                    window.location.href = '/';
-                }, 2000);
+                setTimeout(() => window.location.href = '/', 2000);
             }
 
             else if (data.type === 'error') {
@@ -41,7 +42,11 @@ function connectWebSocket() {
             }
 
             else {
-                handleSignal(data);
+                if (!peerConnection) {
+                    pendingSignals.push(data);
+                } else {
+                    handleSignal(data);
+                }
             }
 
         } catch (err) {
@@ -54,7 +59,8 @@ function connectWebSocket() {
     };
 
     socket.onclose = () => {
-        updateStatus('Connection closed');
+        updateStatus('Connection lost, retrying...');
+        setTimeout(connectWebSocket, 1500);
     };
 }
 
@@ -64,12 +70,14 @@ function sendSignal(data) {
     }
 }
 
-function updateStatus(message) {
-    const el = document.getElementById('status');
-    if (el) {
-        el.textContent = message;
-    }
+function flushBufferedSignals() {
+    pendingSignals.forEach(handleSignal);
+    pendingSignals = [];
 }
 
-// Start connection immediately
+function updateStatus(message) {
+    const el = document.getElementById('status');
+    if (el) el.textContent = message;
+}
+
 connectWebSocket();

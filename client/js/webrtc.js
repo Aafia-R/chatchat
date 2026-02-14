@@ -4,6 +4,7 @@
 
 let localStream;
 let peerConnection;
+let callDirection = "outgoing";
 let startTime;
 let timerInterval;
 let remoteDescriptionSet = false;
@@ -117,6 +118,12 @@ async function initWebRTC(isInitiator) {
         } else {
             updateStatus('Incoming call...');
         }
+
+        // Apply any signals that arrived before WebRTC initialized
+        if (typeof flushBufferedSignals === "function") {
+            flushBufferedSignals();
+        }
+
 
     } catch (err) {
         console.error('Media error:', err);
@@ -273,7 +280,7 @@ function saveCallToHistory() {
 
     if (typeof saveCall === 'function') {
         saveCall({
-            direction: 'outgoing',
+            direction: callDirection,
             startedAt: Date.now(),
             duration,
             peer: 'unknown'

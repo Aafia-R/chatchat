@@ -44,7 +44,7 @@ def use_invite(token):
     db = get_db()
     try:
         cur = db.execute(
-            "SELECT used, expires_at FROM invites WHERE token=?",
+            "SELECT expires_at FROM invites WHERE token=?",
             (token,)
         )
         row = cur.fetchone()
@@ -52,18 +52,11 @@ def use_invite(token):
         if not row:
             return False
 
-        used, expires = row
+        (expires,) = row
 
-        if used or expires < time.time():
+        if expires < time.time():
             return False
 
-        db.execute(
-            "UPDATE invites SET used=1 WHERE token=?",
-            (token,)
-        )
-        db.commit()
-
         return True
-
     finally:
         db.close()
