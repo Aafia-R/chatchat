@@ -1,3 +1,7 @@
+// ========================================
+// WEBRTC VIDEO + AUDIO ENGINE
+// ========================================
+
 let localStream;
 let peerConnection;
 let startTime;
@@ -5,16 +9,60 @@ let timerInterval;
 let remoteDescriptionSet = false;
 let pendingCandidates = [];
 
+// Track references
+let localAudioTrack;
+let localVideoTrack;
+
+// State
+let isMuted = false;
+let isCameraOff = false;
+
 const config = {
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+    ]
 };
+
+// ========================================
+// INIT WITH VIDEO + AUDIO
+// ========================================
 
 async function initWebRTC(isInitiator) {
     try {
-        updateStatus('Requesting microphone access...');
+        updateStatus('Requesting camera and microphone...');
 
-        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Request video + audio
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                },
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: 'user'
+                }
+            });
+        } catch (videoError) {
+            // Fallback to audio-only if camera denied
+            console.warn('Camera denied, falling back to audio-only');
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
 
+        // Store track references
+        localAudioTrack = localStream.getAudioTracks()[0];
+        localVideoTrack = localStream.getVideoTracks()[0];
+
+        // Show local preview
+        const localVideo = document.getElementById('localVideo');
+        if (localVideo && localVideoTrack) {
+            localVideo.srcObject = localStream;
+        }
+
+        // Create peer connection
         peerConnection = new RTCPeerConnection(config);
 
         // Add local tracks
@@ -22,11 +70,13 @@ async function initWebRTC(isInitiator) {
             peerConnection.addTrack(track, localStream);
         });
 
-        // Remote stream
+        // Handle remote stream
         peerConnection.ontrack = (event) => {
-            const audio = new Audio();
-            audio.srcObject = event.streams[0];
-            audio.play();
+            const remoteVideo = document.getElementById('remoteVideo');
+            
+            if (remoteVideo) {
+                remoteVideo.srcObject = event.streams[0];
+            }
 
             updateStatus('Connected');
             showCallControls();
@@ -43,8 +93,20 @@ async function initWebRTC(isInitiator) {
             }
         };
 
+        // Connection state monitoring
+        peerConnection.onconnectionstatechange = () => {
+            console.log('Connection state:', peerConnection.connectionState);
+            
+            if (peerConnection.connectionState === 'disconnected' || 
+                peerConnection.connectionState === 'failed') {
+                updateStatus('Connection lost');
+                setTimeout(endCall, 2000);
+            }
+        };
+
         // Initiator creates offer
         if (isInitiator) {
+            updateStatus('Calling...');
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
 
@@ -52,14 +114,28 @@ async function initWebRTC(isInitiator) {
                 type: 'offer',
                 offer
             });
+        } else {
+            updateStatus('Incoming call...');
         }
 
     } catch (err) {
         console.error('Media error:', err);
-        alert('Microphone permission denied or unavailable.');
+        
+        if (err.name === 'NotAllowedError') {
+            alert('Camera/microphone permission denied.');
+        } else if (err.name === 'NotFoundError') {
+            alert('No camera or microphone found.');
+        } else {
+            alert('Failed to access media devices.');
+        }
+        
         window.location.href = '/';
     }
 }
+
+// ========================================
+// SIGNALING HANDLERS
+// ========================================
 
 async function handleSignal(data) {
     if (!peerConnection) return;
@@ -107,6 +183,52 @@ function flushPendingCandidates() {
     });
     pendingCandidates = [];
 }
+
+// ========================================
+// MEDIA CONTROLS
+// ========================================
+
+function toggleMute() {
+    if (!localAudioTrack) return;
+
+    isMuted = !isMuted;
+    localAudioTrack.enabled = !isMuted;
+
+    // Update UI
+    const muteBtn = document.getElementById('muteBtn');
+    const muteIcon = document.getElementById('muteIcon');
+    
+    if (muteBtn && muteIcon) {
+        muteIcon.textContent = isMuted ? '🔇' : '🎤';
+        muteBtn.classList.toggle('bg-red-600', isMuted);
+        muteBtn.classList.toggle('bg-gray-700', !isMuted);
+    }
+
+    return isMuted;
+}
+
+function toggleCamera() {
+    if (!localVideoTrack) return;
+
+    isCameraOff = !isCameraOff;
+    localVideoTrack.enabled = !isCameraOff;
+
+    // Update UI
+    const cameraBtn = document.getElementById('cameraBtn');
+    const cameraIcon = document.getElementById('cameraIcon');
+    
+    if (cameraBtn && cameraIcon) {
+        cameraIcon.textContent = isCameraOff ? '📷' : '📹';
+        cameraBtn.classList.toggle('bg-gray-600', isCameraOff);
+        cameraBtn.classList.toggle('bg-gray-700', !isCameraOff);
+    }
+
+    return isCameraOff;
+}
+
+// ========================================
+// CALL LIFECYCLE
+// ========================================
 
 function endCall() {
     cleanupConnection();
@@ -164,10 +286,33 @@ function showCallControls() {
     if (el) el.classList.remove('hidden');
 }
 
-// Bind end button safely
+// ========================================
+// UI HELPERS
+// ========================================
+
+function updateStatus(text) {
+    const el = document.getElementById('status');
+    if (el) el.textContent = text;
+}
+
+// ========================================
+// EVENT BINDINGS
+// ========================================
+
 document.addEventListener('DOMContentLoaded', () => {
-    const endBtn = document.getElementById('endCall');
+    const endBtn = document.getElementById('endCallBtn');
+    const muteBtn = document.getElementById('muteBtn');
+    const cameraBtn = document.getElementById('cameraBtn');
+
     if (endBtn) {
         endBtn.addEventListener('click', endCall);
+    }
+
+    if (muteBtn) {
+        muteBtn.addEventListener('click', toggleMute);
+    }
+
+    if (cameraBtn) {
+        cameraBtn.addEventListener('click', toggleCamera);
     }
 });

@@ -3,48 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secure Call</title>
+    <title>Video Call - Secure Call</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        
+        #remoteVideo {
+            object-fit: cover;
+        }
+        
+        #localVideo {
+            transform: scaleX(-1); /* Mirror local video */
+        }
+    </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
+<body class="bg-black">
 
-    <div class="max-w-md w-full p-8 text-center">
+    <!-- Video Container -->
+    <div class="relative w-screen h-screen">
+        
+        <!-- Remote Video (Full Screen) -->
+        <video 
+            id="remoteVideo" 
+            autoplay 
+            playsinline
+            class="w-full h-full bg-gray-900"
+        ></video>
 
-        <h1 class="text-3xl font-bold mb-6">🔒 Secure Call</h1>
+        <!-- Local Video Preview (Floating) -->
+        <video 
+            id="localVideo" 
+            autoplay 
+            playsinline 
+            muted
+            class="absolute bottom-24 right-4 w-48 h-36 rounded-lg shadow-2xl border-2 border-gray-700 bg-gray-800"
+        ></video>
 
-        <!-- Status -->
-        <div class="mb-4">
-            <div id="status" class="text-gray-400">
+        <!-- Status Overlay (Top) -->
+        <div class="absolute top-4 left-0 right-0 text-center">
+            <div id="status" class="text-white text-lg font-semibold bg-black bg-opacity-50 inline-block px-6 py-2 rounded-full">
                 Connecting...
             </div>
         </div>
 
-        <!-- Duration -->
-        <div class="mb-6">
-            <div class="text-sm text-gray-500">Duration</div>
-            <div id="duration" class="text-2xl font-mono">00:00</div>
+        <!-- Duration (Top Right) -->
+        <div class="absolute top-4 right-4">
+            <div id="duration" class="text-white text-xl font-mono bg-black bg-opacity-50 px-4 py-2 rounded-full">
+                00:00
+            </div>
         </div>
 
-        <!-- Call Controls -->
-        <div id="callControls" class="hidden">
-            <button
-                id="endCall"
-                class="w-full bg-red-600 hover:bg-red-700 font-bold py-4 px-6 rounded-lg transition"
-            >
-                End Call
-            </button>
-        </div>
+        <!-- Control Bar (Bottom) -->
+        <div id="callControls" class="hidden absolute bottom-8 left-0 right-0">
+            <div class="flex justify-center items-center gap-6">
+                
+                <!-- Mute Button -->
+                <button 
+                    id="muteBtn" 
+                    class="w-16 h-16 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center transition transform active:scale-95 shadow-lg"
+                    title="Mute/Unmute"
+                >
+                    <span id="muteIcon" class="text-3xl">🎤</span>
+                </button>
 
-        <!-- Back link (failsafe) -->
-        <div class="mt-6">
-            <a href="/" class="text-blue-400 text-sm hover:underline">
-                Return Home
-            </a>
+                <!-- End Call Button -->
+                <button 
+                    id="endCallBtn" 
+                    class="w-20 h-20 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center transition transform active:scale-95 shadow-xl"
+                    title="End Call"
+                >
+                    <span class="text-4xl">📞</span>
+                </button>
+
+                <!-- Camera Button -->
+                <button 
+                    id="cameraBtn" 
+                    class="w-16 h-16 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center transition transform active:scale-95 shadow-lg"
+                    title="Camera On/Off"
+                >
+                    <span id="cameraIcon" class="text-3xl">📹</span>
+                </button>
+
+            </div>
         </div>
 
     </div>
 
-    <!-- JS Order Matters -->
+    <!-- Scripts -->
     <script src="/js/storage.js"></script>
     <script src="/js/webrtc.js"></script>
     <script src="/js/signaling.js"></script>
