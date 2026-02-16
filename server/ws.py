@@ -86,6 +86,5 @@ def handle_ws(ws, token):
                 safe_send(peer, {"type": "peer-disconnect"})
 
             if not rooms[token]:
-                delete_invite(token)
                 del rooms[token]
 
