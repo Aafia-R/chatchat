@@ -61,8 +61,11 @@ def handle_ws(ws, token):
     try:
         while True:
             msg = ws.receive()
+
+    # Render + Flask-Sock sometimes return None on keepalive
             if msg is None:
-                break
+                continue
+
 
             # relay to other peers safely
             for peer in rooms.get(token, [])[:]:
