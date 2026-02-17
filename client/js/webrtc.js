@@ -40,22 +40,7 @@ let disconnectGraceTimer = null;
 const config = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        {
-            urls: 'turn:openrelay.metered.live:80',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        },
-        {
-            urls: 'turn:openrelay.metered.live:443',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        },
-        {
-            urls: 'turn:openrelay.metered.live:443?transport=tcp',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        }
+        { urls: 'stun:stun1.l.google.com:19302' }
     ]
 };
 
@@ -166,8 +151,6 @@ async function initWebRTC(isInitiator) {
         // Only react to real failure
         // =========================
         peerConnection.oniceconnectionstatechange = () => {
-            const state = peerConnection.iceConnectionState;
-
            if (state === "failed") {
 
             reconnectAttempts++;
