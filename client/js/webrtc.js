@@ -151,19 +151,28 @@ async function initWebRTC(isInitiator) {
         // Only react to real failure
         // =========================
         peerConnection.oniceconnectionstatechange = () => {
-            if (peerLeft) return;
+           if (state === "failed") {
 
-            const state = peerConnection.iceConnectionState;
-            console.log('ICE state:', state);
+            reconnectAttempts++;
 
-            if (state === 'failed') {
-                if (!everConnected) {
-                    showP2PFailure();
-                } else {
-                    scheduleReconnect();
-                }
+            // stop after 3 attempts
+            if (reconnectAttempts >= 3) {
+                showP2PFailure();
+                return;
             }
-        };
+
+            if (!everConnected) {
+                updateStatus("Retrying direct connection…");
+                restartIce();
+                return;
+            }
+
+            reconnecting = true;
+            pauseTimer();
+            scheduleReconnect();
+        }
+
+     };
 
         // =========================
         // CONNECTION STATE
@@ -276,7 +285,8 @@ function scheduleReconnect() {
 
             reconnectAttempts++;
 
-            if (reconnectAttempts > 5) {
+            if (reconnectAttempts >= 3) {
+
                 updateStatus("Reconnection failed");
                 setTimeout(endCall, 2000);
                 return;
@@ -514,10 +524,12 @@ function showP2PFailure() {
     updateStatus("Unable to establish direct connection");
 
     alert(
-        "A direct peer-to-peer connection could not be established.\n\n" +
-        "This usually happens on strict mobile networks, corporate Wi-Fi, or firewalled connections.\n\n" +
-        "Try switching to another network or Wi-Fi."
+        "Direct peer-to-peer connection could not be established.\n\n" +
+        "One of you is likely on a restricted network\n" +
+        "(mobile data, university Wi-Fi, office firewall, etc).\n\n" +
+        "Try switching networks or Wi-Fi."
     );
+
 
     setTimeout(() => window.location.href = '/', 3000);
 }
