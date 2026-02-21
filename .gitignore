@@ -5,6 +5,7 @@ venv/
 
 # SQLite
 database/*.db
+*.db 
 
 # OS junk
 .DS_Store
