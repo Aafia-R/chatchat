@@ -1,6 +1,4 @@
-#  Secure P2P Comm App 
-
-Welcome to the Secure P2P Comm App! This is a highly secure, privacy-first communication platform built for pure peer-to-peer (P2P) connections. It guarantees absolute control over your identity, your messages, and how your data is stored.
+Welcome! This is a highly secure, privacy-first communication platform built for pure peer-to-peer (P2P) connections. It guarantees absolute control over your identity, your messages, and how your data is stored.
 
 ---
 
@@ -73,11 +71,3 @@ Here are the features planned for the future, in order of development:
 
 
 
-##  How to Use Available Features
-
-Follow these simple steps to run the app on your own computer!
-
-### 1. Install the Requirements
-Make sure you have Python installed on your computer. Then, open your terminal (or command prompt), go to your project folder, and run:
-```bash
-pip install -r requirements.txt
