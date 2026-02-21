@@ -4,10 +4,11 @@ import secrets
 from flask import Flask, jsonify, send_from_directory, abort, request
 from flask_sock import Sock
 
-from ws import handle_ws
+from ws.call_ws import handle_ws
 from db import init_db, create_invite
 from config import INVITE_TTL
 
+from ws.chat_ws import handle_chat_ws
 
 # -------------------------------------------------
 # Paths
@@ -84,6 +85,10 @@ def invite():
 
     return jsonify({"token": token, "expires_in": ttl})
 
+
+@sock.route("/ws/chat")
+def chat_route(ws):
+    handle_chat_ws(ws)
 
 
 # WebSocket signaling
